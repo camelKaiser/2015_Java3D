@@ -1,0 +1,220 @@
+import java.awt.event.*;
+
+import java.util.Scanner;
+import com.sun.j3d.utils.universe.*;
+
+import javax.media.j3d.*;
+import javax.vecmath.*;
+
+import com.sun.j3d.utils.geometry.*;
+
+import javax.swing.Timer;
+
+
+
+public class MomentumInput implements ActionListener 
+{
+	ExpandSphere left;
+	ExpandSphere right;
+	
+	public static double massLeft;
+	public static double massRight;
+	
+	public static double forceLeft;
+	public static double forceRight;
+	
+	private boolean collided;
+	private TransformGroup tGroup;
+	private TransformGroup rightTrans;
+	double time = 0.01;
+	double momentumLeft = 0;
+	double momentumRight = 0;
+	
+	private Transform3D move;
+	private Transform3D rightMove;
+	
+	private Timer timer;
+
+
+	public static void main(String[] args) 
+	{
+		Scanner scan = new Scanner(System.in);
+		System.out.println("Please enter the mass of left ball: ");
+		massLeft = scan.nextDouble();
+		System.out.println("Please enter force on left ball: ");
+		forceLeft = scan.nextDouble();
+		System.out.println("Please enter mass of right ball: ");
+		massRight = scan.nextDouble();
+		System.out.println("Please enter force on right ball: ");
+		forceRight = scan.nextDouble();
+		
+		System.setProperty("sun.awt.noerasebackground", "true");
+		new MomentumInput();
+		
+
+	}
+	
+	public MomentumInput()
+	{
+		SimpleUniverse uni = new SimpleUniverse();
+		BranchGroup scene = createSceneGraph();
+		uni.getViewingPlatform().setNominalViewingTransform();
+		uni.addBranchGraph(scene);
+		
+		timer = new Timer(10, this);
+		timer.start();
+	}
+	
+	public BranchGroup createSceneGraph()
+	{
+		
+		BranchGroup bGroup = new BranchGroup(); 
+		left = new ExpandSphere(0.1f,-0.95,0,0);
+		
+	
+		tGroup = new TransformGroup();
+		move = new Transform3D();
+		
+		move.setTranslation(left.disp()); //starts out (-0.8, 0, 0)
+		tGroup.setTransform(move);
+		
+		tGroup.addChild(left);
+		bGroup.addChild(tGroup);
+		
+		
+		
+		tGroup.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+		
+		rightTrans = new TransformGroup(); //initial position of right hand sphere
+		rightMove = new Transform3D();
+		
+		right = new ExpandSphere(0.1f, 0.95,0,0);
+		rightMove.setTranslation(right.disp());
+		rightTrans.setTransform(rightMove);
+		rightTrans.addChild(right);
+		bGroup.addChild(rightTrans);
+		
+		rightTrans.setCapability(TransformGroup.ALLOW_TRANSFORM_WRITE);
+		
+		
+		Appearance ap = left.getAppearance();
+		Material mat = ap.getMaterial();
+		mat.setDiffuseColor(new Color3f(209.0f, 17.0f, 36.0f));
+		// set appearance back
+		left.setAppearance(ap);
+
+		Shape3D sh3D = left.getShape();
+		ap = sh3D.getAppearance();
+		mat = ap.getMaterial();
+		mat.setDiffuseColor(new Color3f(209.0f, 17.0f, 36.0f));
+		// set appearance back
+		sh3D.setAppearance(ap);
+		
+		
+		//lights
+		Color3f pink = new Color3f(0.945f,0.473f,0.836f);
+		BoundingSphere bounds = new BoundingSphere(new Point3d(0.0,0.0,0.0), 100); //sphere 100 radius
+
+		Vector3f light1Direction = new Vector3f(4.0f, -7.0f, -12.0f); 
+
+		DirectionalLight light1 = new DirectionalLight(pink, light1Direction); 
+		
+		light1.setInfluencingBounds(bounds); //set to bounding leaf
+		
+		bGroup.addChild(light1);
+		
+		Color3f ambientColor = new Color3f(1.0f, 1.0f, 1.0f);
+
+		AmbientLight ambientLightNode = new AmbientLight(ambientColor);
+
+		ambientLightNode.setInfluencingBounds(bounds);
+		
+		bGroup.addChild(ambientLightNode);
+		return bGroup;
+		
+		 
+	}
+	public void actionPerformed(ActionEvent e) //called every cycle of the timer
+	{
+		if(!collided)
+		{  
+			double accL = (forceLeft*0.1/massLeft);
+			double accR = (-1)*(forceRight*0.1/massRight);
+			System.out.println(accL + " " + accR);
+			System.out.println(left.disp().getX());
+			left.setAcc(accL);
+			left.setDisp(new Vector3d(left.disp().getX() + left.vel()*time + (0.5*accL*Math.pow(time,2)), 0.0, 0.0));
+			move.setTranslation(left.disp());
+			left.setVel(accL*time + left.vel());
+			System.out.println(left.disp().getX());
+			
+			tGroup.setTransform(move);
+			
+			right.setAcc(accR);
+			right.setDisp(new Vector3d(right.disp().getX() + right.vel()*time + (0.5*accR*Math.pow(time,2)), 0.0, 0.0));
+			rightMove.setTranslation(right.disp());
+			right.setVel(accR*time + right.vel());
+			rightTrans.setTransform(rightMove);
+		
+			
+		
+			momentumLeft = left.vel()*massLeft;
+			momentumRight = right.vel()*massRight;
+			
+			
+			if(collision(0.1f, 0.1f, left.disp(), right.disp()))
+			{
+				collided = true;
+				//calculate resulting velocities using m1v1 + m2v2 = m1v3 + m2v4
+				System.out.println("initial momentumleft "+ momentumLeft + " initial momentumright " + momentumRight);
+				
+				double m1v3m2v4 = momentumLeft + momentumRight;
+				double numerator = (momentumRight/massRight - momentumLeft/massLeft);
+				//System.out.println(numerator);
+				System.out.println("total momentum " + m1v3m2v4);
+				
+				
+				double v4 = (m1v3m2v4-(massLeft*numerator))/(massLeft+massRight);
+				double v3 = numerator+v4;
+				System.out.println(v4 + "and " + v3);
+				momentumRight = v4*massRight;
+				momentumLeft = v3*massLeft;
+			}
+		}else
+		{ //a collision has occured
+			double vL = momentumLeft/massLeft;
+			System.out.println("resulting velocity left ball "+vL);
+			double rL = momentumRight/massRight;
+			System.out.println("resulting velocity right ball "+ rL);
+			
+			left.setAcc(0);
+			left.setVel(vL);
+			left.setDisp(new Vector3d(left.disp().getX() + vL*time,0,0));
+			move.setTranslation(left.disp());
+			tGroup.setTransform(move);
+			
+			right.setAcc(0);
+			right.setVel(rL);
+			right.setDisp(new Vector3d(right.disp().getX() + rL*time,0,0));
+			rightMove.setTranslation(right.disp());
+			rightTrans.setTransform(rightMove);
+			
+			
+		}
+	}
+	
+	
+	
+	public boolean collision(float r1, float r2, Vector3d position1, Vector3d position2)
+	{
+		float distance = r1+r2;
+		
+		return Math.sqrt(Math.pow(position1.getX()-position2.getX(), 2) + Math.pow(position1.getY()-position2.getY(), 2) + Math.pow(position1.getZ()-position2.getZ(), 2)) <= distance;
+		
+		
+	}
+
+
+}
+
+
